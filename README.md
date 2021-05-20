@@ -90,7 +90,7 @@ func main() {
 
 ```
 
-## Example
+## More Example
 - [example](https://github.com/whiteCcinn/named-pipe-ipc/tree/main/example)
 
 

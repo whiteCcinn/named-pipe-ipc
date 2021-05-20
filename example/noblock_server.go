@@ -16,9 +16,14 @@ func main() {
 	go func() {
 		go func() {
 			for {
-				msg, err := nctx.Recv(true,'\n')
-				if err != nil {
+				msg, err := nctx.Recv(false, '\n')
+				if err != nil && err.Error() != named_pipe_ipc.NoMessageMessage {
 					log.Fatal(err)
+				}
+
+				if msg == nil {
+					log.Println("next recv...")
+					continue
 				}
 
 				log.Println("from clint", msg)
@@ -27,6 +32,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
+				time.Sleep(5 * time.Second)
 			}
 		}()
 

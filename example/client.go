@@ -12,8 +12,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	nctx.Send(named_pipe_ipc.Message("nihao\n"))
-	msg, err := nctx.Recv('\n')
+	_, _ = nctx.Send(named_pipe_ipc.Message("nihao\n"))
+	msg, err := nctx.Recv(true, '\n')
 	if err != nil {
 		log.Fatal(err)
 	}

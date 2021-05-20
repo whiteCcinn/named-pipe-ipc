@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"time"
 )
 
 const (
@@ -95,6 +96,7 @@ func createFifo(nctx *Context) (err error) {
 
 	return nil
 }
+
 // OpenPipeFile
 //
 // Why use os.RDWR? not os.RD_ONLY or os.WD_ONLY ?
@@ -206,8 +208,14 @@ func (nctx *Context) Send(message Message) (int, error) {
 //
 // This API should work best with Read, but since most people are web developers
 // the send()/ recv() combination is more acceptable
-func (nctx *Context) Recv(delim byte) (Message, error) {
+func (nctx *Context) Recv(block bool, delim byte) (Message, error) {
 	if nctx.role == S {
+		if !block {
+			if len(nctx.out) == 0 {
+				time.Sleep(1 * time.Millisecond)
+				return nil, NoMessage{}
+			}
+		}
 		return <-nctx.out, nil
 	} else {
 		bf, err := nctx.br.ReadBytes(delim)
