@@ -6,6 +6,12 @@
 - named-pipe-ipc(Not limited to parent-child processes)
 - full-duplex communication
 
+## Installation
+
+```shell
+go get github.com/whiteCcinn/named-pipe-ipc
+```
+
 ## Usage
 
 ### server
