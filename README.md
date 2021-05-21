@@ -93,7 +93,6 @@ func main() {
 ## More Example
 - [example](https://github.com/whiteCcinn/named-pipe-ipc/tree/main/example)
 
-
 ## Example Log
 
 ```go
@@ -109,3 +108,7 @@ root@0140ee5d78cf:/www/example# go run server.go
 root@0140ee5d78cf:/www/example# go run client.go
 2021/05/20 07:47:12 from server send to client
 ```
+
+## Projects using
+
+- [whiteCcinn/daemon: Go supervisor daemon module, similar to the Erlang | python's supervisor, assist you in better monitor your business processes 🚀](https://github.com/whiteCcinn/daemon)
