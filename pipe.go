@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -143,6 +144,10 @@ func openPipeFile(nctx *Context) (err error) {
 func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Option) (*Context, error) {
 	if !IsDir(chroot) {
 		return nil, NotDirectory{}
+	}
+
+	if !strings.HasSuffix(chroot, "/") {
+		chroot += "/"
 	}
 
 	for _, o := range opts {
