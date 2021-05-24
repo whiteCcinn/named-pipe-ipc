@@ -20,7 +20,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		if msg == nil && err != nil && err.Error() == named_pipe_ipc.NoMessageMessage {
+		if msg == nil && err != nil && (err.Error() == named_pipe_ipc.NoMessageMessage && err.Error() == named_pipe_ipc.PipeClosedMessage) {
 			time.Sleep(500 * time.Millisecond)
 			log.Println("next recv...")
 			continue

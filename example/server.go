@@ -8,8 +8,9 @@ import (
 )
 
 func main() {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	// use pipe-IPC
-	nctx, err := named_pipe_ipc.NewContext(context.Background(), "./", named_pipe_ipc.S)
+	nctx, err := named_pipe_ipc.NewContext(ctx, "./", named_pipe_ipc.S)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -17,13 +18,13 @@ func main() {
 		go func() {
 			for {
 				msg, err := nctx.Recv(true)
-				if err != nil {
+				if err != nil && err.Error() != named_pipe_ipc.PipeClosedMessage {
 					log.Fatal(err)
 				}
 
 				log.Println("from clint", msg)
 
-				_, err = nctx.Send(named_pipe_ipc.Message("send to client\n"))
+				_, err = nctx.Send(named_pipe_ipc.Message("send to client"))
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -39,5 +40,9 @@ func main() {
 	for {
 		log.Println("I am server")
 		time.Sleep(5 * time.Second)
+		if err := nctx.Close(); err != nil {
+			log.Println(err)
+		}
+		break
 	}
 }

@@ -165,12 +165,14 @@ func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Optio
 	nctx.context = ctx
 	nctx.out = make(chan Message, 10)
 
-	err := createFifo(nctx)
-	if err != nil {
-		return nil, err
+	if nctx.role == S {
+		err := createFifo(nctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	err = openPipeFile(nctx)
+	err := openPipeFile(nctx)
 	if err != nil {
 		return nil, err
 	}
@@ -228,10 +230,22 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 				return nil, NoMessage{}
 			}
 		}
-		return <-nctx.out, nil
+
+		msg := <-nctx.out
+		if msg == nil {
+			return msg, Closed{}
+		}
+
+		return msg, nil
 	} else {
 		bf, err := nctx.br.ReadBytes(nctx.delim)
 		if err != nil && err != io.EOF {
+			if pe, ok := err.(*os.PathError); ok {
+				if pe.Err == os.ErrClosed {
+					return bf, Closed{}
+				}
+			}
+
 			return nil, err
 		}
 		return bf, nil
@@ -248,14 +262,76 @@ func (nctx *Context) Listen() error {
 			close(nctx.out)
 			return nil
 		default:
+			if nctx.context.Err() != nil {
+				close(nctx.out)
+				return nctx.context.Err()
+			}
 		}
 
 		bf, err = nctx.br.ReadBytes(nctx.delim)
 		if err != nil && err != io.EOF {
+			if pe, ok := err.(*os.PathError); ok {
+				if pe.Err == os.ErrClosed {
+					return nil
+				}
+			}
+
 			return err
 		}
 
 		nctx.out <- bf
+	}
+
+	return nil
+}
+
+func (nctx *Context) Close() error {
+	if err := nctx.rPipe.Close(); err != nil {
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err != os.ErrClosed {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if err := nctx.wPipe.Close(); err != nil {
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err != os.ErrClosed {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if err := nctx.removeFiFo(); err != nil {
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err != os.ErrClosed {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (nctx *Context) removeFiFo() error {
+	if IsFile(nctx.namedPipeForWriteFullPath()) {
+		err := os.Remove(nctx.namedPipeForWriteFullPath())
+		if err != nil {
+			return err
+		}
+	}
+
+	if IsFile(nctx.namedPipeForReadFullPath()) {
+		err := os.Remove(nctx.namedPipeForReadFullPath())
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
