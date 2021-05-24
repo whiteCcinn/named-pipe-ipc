@@ -16,7 +16,7 @@ func main() {
 	go func() {
 		go func() {
 			for {
-				msg, err := nctx.Recv(false, '\n')
+				msg, err := nctx.Recv(false)
 				if err != nil && err.Error() != named_pipe_ipc.NoMessageMessage {
 					log.Fatal(err)
 				}
@@ -36,7 +36,7 @@ func main() {
 			}
 		}()
 
-		err = nctx.Listen('\n')
+		err = nctx.Listen()
 		if err != nil {
 			log.Fatal(err)
 		}

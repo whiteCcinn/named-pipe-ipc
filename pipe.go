@@ -11,16 +11,19 @@ import (
 
 const (
 	defaultUmask             = 0600
+	defaultDelim             = '\n'
 	defaultNamedPipeForRead  = "golang.pipe.1.r"
 	defaultNamedPipeForWrite = "golang.pipe.1.w"
 )
 
 var defaultOption = &options{
+	defaultDelim,
 	defaultNamedPipeForRead,
 	defaultNamedPipeForWrite,
 }
 
 type options struct {
+	delim             byte
 	namedPipeForRead  string
 	namedPipeForWrite string
 }
@@ -47,6 +50,12 @@ func WithNamedPipeForWrite(name string) Option {
 	})
 }
 
+func WithDelim(delim byte) Option {
+	return OptionsFunc(func(o *options) {
+		o.delim = delim
+	})
+}
+
 type Message []byte
 
 func (M Message) String() string {
@@ -61,6 +70,7 @@ type Context struct {
 	out  chan Message
 	role RoleType
 
+	delim byte
 	rPipe *os.File
 	wPipe *os.File
 	br    *bufio.Reader
@@ -97,7 +107,7 @@ func createFifo(nctx *Context) (err error) {
 	return nil
 }
 
-// OpenPipeFile
+// openPipeFile
 //
 // Why use os.RDWR? not os.RD_ONLY or os.WD_ONLY ?
 //
@@ -114,7 +124,7 @@ func createFifo(nctx *Context) (err error) {
 // 	1. If no process has opened a FIFO for read, writing only open will return -1.
 // 	2. Named pipes do not block when reading data.
 //  3. During the communication process, when the reader process exits and the writer process writes data to the named pipe, the writer process will also exit (receiving SIGPIPE signal).
-func OpenPipeFile(nctx *Context) (err error) {
+func openPipeFile(nctx *Context) (err error) {
 	nctx.rPipe, err = os.OpenFile(nctx.namedPipeForReadFullPath(), os.O_RDWR, os.ModeNamedPipe)
 	if err != nil {
 		return err
@@ -142,6 +152,7 @@ func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Optio
 	nctx := &Context{
 		role:              role,
 		chroot:            chroot,
+		delim:             defaultOption.delim,
 		namedPipeForRead:  defaultOption.namedPipeForRead,
 		namedPipeForWrite: defaultOption.namedPipeForWrite,
 	}
@@ -159,7 +170,7 @@ func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Optio
 		return nil, err
 	}
 
-	err = OpenPipeFile(nctx)
+	err = openPipeFile(nctx)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +203,7 @@ func (nctx *Context) Chroot() string {
 // This API should work best with Write, but since most people are web developers
 // the send()/ recv() combination is more acceptable
 func (nctx *Context) Send(message Message) (int, error) {
+	message = append(message, nctx.delim)
 	nn, err := nctx.bw.Write(message)
 	if err != nil {
 		return 0, nil
@@ -208,7 +220,7 @@ func (nctx *Context) Send(message Message) (int, error) {
 //
 // This API should work best with Read, but since most people are web developers
 // the send()/ recv() combination is more acceptable
-func (nctx *Context) Recv(block bool, delim byte) (Message, error) {
+func (nctx *Context) Recv(block bool) (Message, error) {
 	if nctx.role == S {
 		if !block {
 			if len(nctx.out) == 0 {
@@ -218,7 +230,7 @@ func (nctx *Context) Recv(block bool, delim byte) (Message, error) {
 		}
 		return <-nctx.out, nil
 	} else {
-		bf, err := nctx.br.ReadBytes(delim)
+		bf, err := nctx.br.ReadBytes(nctx.delim)
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
@@ -227,7 +239,7 @@ func (nctx *Context) Recv(block bool, delim byte) (Message, error) {
 }
 
 // Listen Message
-func (nctx *Context) Listen(delim byte) error {
+func (nctx *Context) Listen() error {
 	var err error
 	var bf Message
 	for err == nil {
@@ -238,7 +250,7 @@ func (nctx *Context) Listen(delim byte) error {
 		default:
 		}
 
-		bf, err = nctx.br.ReadBytes(delim)
+		bf, err = nctx.br.ReadBytes(nctx.delim)
 		if err != nil && err != io.EOF {
 			return err
 		}
