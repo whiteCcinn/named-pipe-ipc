@@ -35,7 +35,7 @@ func main() {
 	go func() {
 		go func() {
 			for {
-				msg, err := nctx.Recv('\n')
+				msg, err := nctx.Recv(true)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -49,7 +49,7 @@ func main() {
 			}
 		}()
 
-		err = nctx.Listen('\n')
+		err = nctx.Listen()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -60,6 +60,7 @@ func main() {
 		time.Sleep(5 * time.Second)
 	}
 }
+
 ```
 
 ### client
@@ -79,15 +80,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	nctx.Send(named_pipe_ipc.Message("nihao\n"))
-	msg, err := nctx.Recv('\n')
+	_, _ = nctx.Send(named_pipe_ipc.Message("nihao"))
+	msg, err := nctx.Recv(true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.Println("from server", msg)
 }
-
 ```
 
 ## More Example
