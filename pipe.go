@@ -291,23 +291,27 @@ func (nctx *Context) Listen() error {
 }
 
 func (nctx *Context) Close() error {
-	if err := nctx.rPipe.Close(); err != nil {
-		if pe, ok := err.(*os.PathError); ok {
-			if pe.Err != os.ErrClosed {
+	if nctx.rPipe != nil {
+		if err := nctx.rPipe.Close(); err != nil {
+			if pe, ok := err.(*os.PathError); ok {
+				if pe.Err != os.ErrClosed {
+					return err
+				}
+			} else {
 				return err
 			}
-		} else {
-			return err
 		}
 	}
 
-	if err := nctx.wPipe.Close(); err != nil {
-		if pe, ok := err.(*os.PathError); ok {
-			if pe.Err != os.ErrClosed {
+	if nctx.wPipe != nil {
+		if err := nctx.wPipe.Close(); err != nil {
+			if pe, ok := err.(*os.PathError); ok {
+				if pe.Err != os.ErrClosed {
+					return err
+				}
+			} else {
 				return err
 			}
-		} else {
-			return err
 		}
 	}
 
