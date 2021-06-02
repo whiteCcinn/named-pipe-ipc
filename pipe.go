@@ -244,6 +244,7 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 		return msg, nil
 	} else {
 		bf, err := nctx.br.ReadBytes(nctx.delim)
+		bf = bf[:len(bf)-1]
 		if err != nil && err != io.EOF {
 			if pe, ok := err.(*os.PathError); ok {
 				if pe.Err == os.ErrClosed {
