@@ -244,16 +244,18 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 		return msg, nil
 	} else {
 		bf, err := nctx.br.ReadBytes(nctx.delim)
-		bf = bf[:len(bf)-1]
 		if err != nil && err != io.EOF {
 			if pe, ok := err.(*os.PathError); ok {
 				if pe.Err == os.ErrClosed {
-					return bf, Closed{}
+					return nil, Closed{}
 				}
 			}
 
 			return nil, err
 		}
+
+		// read not include nctx.delim
+		bf = bf[:len(bf)-1]
 		return bf, nil
 	}
 }
@@ -275,7 +277,6 @@ func (nctx *Context) Listen() error {
 		}
 
 		bf, err = nctx.br.ReadBytes(nctx.delim)
-		bf = bf[:len(bf)-1]
 		if err != nil && err != io.EOF {
 			if pe, ok := err.(*os.PathError); ok {
 				if pe.Err == os.ErrClosed {
@@ -286,6 +287,8 @@ func (nctx *Context) Listen() error {
 			return err
 		}
 
+		// read not include nctx.delim
+		bf = bf[:len(bf)-1]
 		nctx.out <- bf
 	}
 
