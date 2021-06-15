@@ -1,5 +1,7 @@
 package named_pipe_ipc
 
+import "fmt"
+
 const (
 	AlreadyExistButNotNamedPipeMessage = "Already exist but which not named pipe"
 	NotDirectoryMessage                = "It is not a directory, because it has to be a directory"
@@ -41,4 +43,13 @@ type Closed struct {
 
 func (e Closed) Error() string {
 	return PipeClosedMessage
+}
+
+type HybridError struct {
+	EA error
+	EB error
+}
+
+func (e HybridError) Error() string {
+	return fmt.Sprintf("EA: %v, EB: %v", e.EA, e.EB)
 }

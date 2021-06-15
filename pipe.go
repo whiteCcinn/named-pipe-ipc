@@ -236,27 +236,53 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 			}
 		}
 
-		msg := <-nctx.out
-		if msg == nil {
-			return msg, Closed{}
-		}
-
-		return msg, nil
-	} else {
-		bf, err := nctx.br.ReadBytes(nctx.delim)
-		if err != nil && err != io.EOF {
-			if pe, ok := err.(*os.PathError); ok {
-				if pe.Err == os.ErrClosed {
-					return nil, Closed{}
+		for {
+			select {
+			case <-nctx.context.Done():
+				return nil, nctx.context.Err()
+			case msg := <-nctx.out:
+				if msg == nil {
+					return msg, Closed{}
 				}
+				return msg, nil
 			}
-
-			return nil, err
 		}
+	} else {
+		var (
+			bf  []byte
+			err error
+		)
 
-		// read not include nctx.delim
-		bf = bf[:len(bf)-1]
-		return bf, nil
+		ok := make(chan bool, 1)
+
+		go func() {
+			bf, err = nctx.br.ReadBytes(nctx.delim)
+			if err != nil && err != io.EOF {
+				if pe, ok := err.(*os.PathError); ok {
+					if pe.Err == os.ErrClosed {
+						bf = nil
+						err = Closed{}
+						return
+					}
+				}
+
+				bf = nil
+				return
+			}
+			ok <- true
+		}()
+
+		for {
+			select {
+			case <-nctx.context.Done():
+				err = nctx.Close()
+				return nil, HybridError{nctx.context.Err(), err}
+			case <-ok:
+				// read not include nctx.delim
+				bf = bf[:len(bf)-1]
+				return bf, nil
+			}
+		}
 	}
 }
 

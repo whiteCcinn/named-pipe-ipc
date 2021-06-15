@@ -7,7 +7,9 @@ import (
 )
 
 func main() {
-	nctx, err := named_pipe_ipc.NewContext(context.Background(), "./", named_pipe_ipc.C)
+	//ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx := context.Background()
+	nctx, err := named_pipe_ipc.NewContext(ctx, "./", named_pipe_ipc.C)
 	if err != nil {
 		log.Fatal(err)
 	}
