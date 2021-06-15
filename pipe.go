@@ -275,7 +275,7 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 		for {
 			select {
 			case <-nctx.context.Done():
-				err = nctx.Close()
+				err = nctx.close()
 				return nil, HybridError{nctx.context.Err(), err}
 			case <-ok:
 				// read not include nctx.delim
@@ -322,6 +322,24 @@ func (nctx *Context) Listen() error {
 }
 
 func (nctx *Context) Close() error {
+	if err := nctx.close(); err != nil {
+			return err
+	}
+
+	if err := nctx.removeFiFo(); err != nil {
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err != os.ErrClosed {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (nctx *Context) close() error {
 	if nctx.rPipe != nil {
 		if err := nctx.rPipe.Close(); err != nil {
 			if pe, ok := err.(*os.PathError); ok {
@@ -343,16 +361,6 @@ func (nctx *Context) Close() error {
 			} else {
 				return err
 			}
-		}
-	}
-
-	if err := nctx.removeFiFo(); err != nil {
-		if pe, ok := err.(*os.PathError); ok {
-			if pe.Err != os.ErrClosed {
-				return err
-			}
-		} else {
-			return err
 		}
 	}
 

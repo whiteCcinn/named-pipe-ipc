@@ -24,7 +24,7 @@ func main() {
 
 				log.Println("from clint", msg)
 
-				//time.Sleep(4 * time.Second)
+				time.Sleep(4 * time.Second)
 
 				_, err = nctx.Send(named_pipe_ipc.Message("send to client"))
 				if err != nil {
@@ -41,10 +41,10 @@ func main() {
 
 	for {
 		log.Println("I am server")
-		time.Sleep(1 * time.Second)
-		if err := nctx.Close(); err != nil {
-			log.Println(err)
-		}
-		break
+		time.Sleep(10 * time.Second)
+		//if err := nctx.Close(); err != nil {
+		//	log.Println(err)
+		//}
+		//break
 	}
 }

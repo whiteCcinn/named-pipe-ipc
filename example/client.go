@@ -4,11 +4,12 @@ import (
 	"context"
 	named_pipe_ipc "github.com/whiteCcinn/named-pipe-ipc"
 	"log"
+	"time"
 )
 
 func main() {
-	//ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
-	ctx := context.Background()
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	//ctx := context.Background()
 	nctx, err := named_pipe_ipc.NewContext(ctx, "./", named_pipe_ipc.C)
 	if err != nil {
 		log.Fatal(err)
