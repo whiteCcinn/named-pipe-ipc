@@ -24,8 +24,6 @@ func main() {
 
 				log.Println("from clint", dsm.Payload())
 
-				time.Sleep(4 * time.Second)
-
 				_, err = nctx.Send(dsm.ResponsePayload(named_pipe_ipc.Message("send to client")))
 				if err != nil {
 					log.Fatal(err)

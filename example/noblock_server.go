@@ -27,10 +27,10 @@ func main() {
 				}
 
 				//errMessage := named_pipe_ipc.Message("send to client")
-				dsm.ResponsePayload(named_pipe_ipc.Message("send to client"))
+				response := dsm.ResponsePayload(named_pipe_ipc.Message("send to client"))
 
 				//_, err = nctx.Send(errMessage)
-				_, err = nctx.Send(dsm)
+				_, err = nctx.Send(response)
 				if err != nil {
 					log.Fatal(err)
 				}
