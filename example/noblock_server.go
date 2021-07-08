@@ -16,19 +16,21 @@ func main() {
 	go func() {
 		go func() {
 			for {
-				msg, err := nctx.Recv(false)
+				dsm, err := nctx.Recv(false)
 				if err != nil && (err.Error() != named_pipe_ipc.NoMessageMessage && err.Error() != named_pipe_ipc.PipeClosedMessage) {
 					log.Fatal(err)
 				}
 
-				if msg == nil {
+				if dsm == nil {
 					log.Println("next recv...")
 					continue
 				}
 
-				log.Println("from clint", msg)
+				//errMessage := named_pipe_ipc.Message("send to client")
+				dsm.ResponsePayload(named_pipe_ipc.Message("send to client"))
 
-				_, err = nctx.Send(named_pipe_ipc.Message("send to client"))
+				//_, err = nctx.Send(errMessage)
+				_, err = nctx.Send(dsm)
 				if err != nil {
 					log.Fatal(err)
 				}

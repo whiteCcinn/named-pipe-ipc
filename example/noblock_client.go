@@ -15,18 +15,18 @@ func main() {
 
 	nctx.Send(named_pipe_ipc.Message("nihao"))
 	for {
-		msg, err := nctx.Recv(false)
+		dsm, err := nctx.Recv(false)
 		if err != nil && err.Error() != named_pipe_ipc.NoMessageMessage {
 			log.Fatal(err)
 		}
 
-		if msg == nil && err != nil && (err.Error() == named_pipe_ipc.NoMessageMessage && err.Error() == named_pipe_ipc.PipeClosedMessage) {
+		if dsm == nil && err != nil && (err.Error() == named_pipe_ipc.NoMessageMessage && err.Error() == named_pipe_ipc.PipeClosedMessage) {
 			time.Sleep(500 * time.Millisecond)
 			log.Println("next recv...")
 			continue
 		}
 
-		log.Println("from server", msg)
+		log.Println("from server", dsm.Payload())
 		break
 	}
 }

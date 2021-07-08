@@ -2,7 +2,10 @@ package named_pipe_ipc
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/binary"
+	uuid2 "github.com/satori/go.uuid"
 	"io"
 	"os"
 	"strings"
@@ -15,6 +18,12 @@ const (
 	defaultDelim             = '\n'
 	defaultNamedPipeForRead  = "golang.pipe.1.r"
 	defaultNamedPipeForWrite = "golang.pipe.1.w"
+)
+
+const (
+	protoNormalType   byte = '0'
+	protoResponseType byte = '1'
+	protoFlag              = "named-pipe-ipc"
 )
 
 var defaultOption = &options{
@@ -57,6 +66,12 @@ func WithDelim(delim byte) Option {
 	})
 }
 
+/**
+protocol:
+	14byte - 1byte - 16byte - 8byte - string
+	flag - type - uuid  - ttl - content
+*/
+
 type Message []byte
 
 func (M Message) String() string {
@@ -65,6 +80,65 @@ func (M Message) String() string {
 
 func (M Message) Byte() []byte {
 	return M
+}
+
+func (M Message) segmentTypeLen() int {
+	return 1
+}
+
+func (M Message) segmentUUIDLen() int {
+	return 16
+}
+
+func (M Message) segmentFlagLen() int {
+	return len(protoFlag)
+}
+
+func (M Message) segmentTTLLen() int {
+	return 8
+}
+
+func (M Message) segmentFlag() (flag []byte) {
+	flag = M[0:M.segmentFlagLen()].Byte()
+
+	return flag
+}
+
+func (M Message) segmentType() (t byte) {
+	t = M[M.segmentFlagLen():M.segmentTypeLen()].Byte()[0]
+
+	return t
+}
+
+func (M Message) segmentUUID() (uuid uuid2.UUID, err error) {
+	uuid, err = uuid2.FromBytes(M[M.segmentFlagLen()+M.segmentTypeLen() : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()])
+	return
+}
+
+func (M Message) segmentTTL() (ttl int64) {
+	timestamp := M[M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen() : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
+	ttl = int64(binary.BigEndian.Uint64(timestamp))
+
+	return
+}
+
+func (M Message) segmentPayload() Message {
+	return M[M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen():]
+}
+
+func (M Message) Payload() Message {
+	return M.segmentPayload()
+}
+
+func (M Message) isLegal() bool {
+	return bytes.Equal(M.segmentFlag(), []byte(protoFlag))
+}
+
+func (M Message) ResponsePayload(message Message) Message {
+	M[M.segmentFlagLen()] = protoResponseType
+	m := M[0 : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
+	m = append(m, message.Byte()...)
+	return m
 }
 
 type Context struct {
@@ -81,6 +155,8 @@ type Context struct {
 	chroot            string
 	namedPipeForRead  string
 	namedPipeForWrite string
+
+	clientID uuid2.UUID
 }
 
 func createFifo(nctx *Context) (err error) {
@@ -165,6 +241,8 @@ func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Optio
 	if nctx.role == C {
 		nctx.namedPipeForWrite = defaultOption.namedPipeForRead
 		nctx.namedPipeForRead = defaultOption.namedPipeForWrite
+
+		nctx.clientID = uuid2.NewV4()
 	}
 
 	nctx.context = ctx
@@ -210,7 +288,39 @@ func (nctx *Context) Chroot() string {
 // This API should work best with Write, but since most people are web developers
 // the send()/ recv() combination is more acceptable
 func (nctx *Context) Send(message Message) (int, error) {
-	message = append(message, nctx.delim)
+	if nctx.role == S {
+		if !message.isLegal() {
+			return 0, new(MessageNotLegal)
+		}
+		return nctx.directlySend(append(message, nctx.delim))
+	}
+	buf := make([]byte, 0, 0)
+	// flag
+	buf = append(buf, []byte(protoFlag)...)
+	// type
+	buf = append(buf, protoNormalType)
+	// uuid
+	buf = append(buf, nctx.clientID.Bytes()...)
+	// ttl 10second
+	ttl := time.Now().Unix() + 10
+	timeBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(timeBuf, uint64(ttl))
+	buf = append(buf, timeBuf...)
+	// content
+	buf = append(buf, append(message, nctx.delim).Byte()...)
+	nn, err := nctx.bw.Write(buf)
+	if err != nil {
+		return 0, nil
+	}
+	err = nctx.bw.Flush()
+	if err != nil {
+		return 0, err
+	}
+
+	return nn, nil
+}
+
+func (nctx *Context) directlySend(message Message) (int, error) {
 	nn, err := nctx.bw.Write(message)
 	if err != nil {
 		return 0, nil
@@ -256,6 +366,7 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 		ok := make(chan bool, 1)
 
 		go func() {
+		ReadBytes:
 			bf, err = nctx.br.ReadBytes(nctx.delim)
 			if err != nil && err != io.EOF {
 				if pe, ok := err.(*os.PathError); ok {
@@ -269,6 +380,26 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 				bf = nil
 				return
 			}
+
+			message := Message(bf)
+			uuid, err := message.segmentUUID()
+			if err != nil {
+				return
+			}
+			if message.segmentTTL() < time.Now().Unix() {
+				// drop message
+				goto ReadBytes
+			}
+
+			if uuid != nctx.clientID {
+				// resend message to server
+				_, err = nctx.directlySend(message)
+				if err != nil {
+					return
+				}
+				goto ReadBytes
+			}
+
 			ok <- true
 		}()
 
@@ -323,7 +454,7 @@ func (nctx *Context) Listen() error {
 
 func (nctx *Context) Close() error {
 	if err := nctx.close(); err != nil {
-			return err
+		return err
 	}
 
 	if err := nctx.removeFiFo(); err != nil {

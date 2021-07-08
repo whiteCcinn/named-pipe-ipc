@@ -1,2 +1,4 @@
 github.com/erikdubbelboer/gspt v0.0.0-20201015204752-6cb2489021da h1:WYBKaCn5C+BL/GbYk+VhQ++33k1z9tYYua0mgjbbh+8=
 github.com/erikdubbelboer/gspt v0.0.0-20201015204752-6cb2489021da/go.mod h1:v6o7m/E9bfvm79dE1iFiF+3T7zLBnrjYjkWMa1J+Hv0=
+github.com/satori/go.uuid v1.2.0 h1:0uYX9dsZ2yD7q2RtLRtPSdGDWzjeM3TbMJP9utgA0ww=
+github.com/satori/go.uuid v1.2.0/go.mod h1:dA0hQrYB0VpLJoorglMZABFdXlWrHn1NEOzdhQKdks0=

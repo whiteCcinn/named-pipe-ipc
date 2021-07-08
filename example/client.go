@@ -19,10 +19,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	msg, err := nctx.Recv(true)
+	dsm, err := nctx.Recv(true)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Println("from server", msg)
+	log.Println("from server", dsm.Payload())
 }

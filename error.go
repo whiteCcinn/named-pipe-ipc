@@ -6,6 +6,7 @@ const (
 	AlreadyExistButNotNamedPipeMessage = "Already exist but which not named pipe"
 	NotDirectoryMessage                = "It is not a directory, because it has to be a directory"
 	NoMessageMessage                   = "Not receive message"
+	MessageNotLegalMessage             = "Message is not legal"
 	NoPipeExistMessage                 = "No pipe exist"
 	PipeClosedMessage                  = "pipe closed"
 )
@@ -22,6 +23,13 @@ type NotDirectory struct {
 
 func (e NotDirectory) Error() string {
 	return NotDirectoryMessage
+}
+
+type MessageNotLegal struct {
+}
+
+func (e MessageNotLegal) Error() string {
+	return MessageNotLegalMessage
 }
 
 type NoMessage struct {
