@@ -119,6 +119,18 @@ root@0140ee5d78cf:/www/example# go run client.go
 2021/05/20 07:47:12 from server send to client
 ```
 
+## Stress Test
+
+```
+## server
+go run example/noblock_server.go
+
+# other window
+i="0";while [ $i -lt 10 ]; do nohup go run example/noblock_client.go > output.$i 2>&1 &;i=$[$i+1];done
+
+# see the out.* content
+```
+
 ## Projects using
 
 - [whiteCcinn/daemon: Go supervisor daemon module, similar to the Erlang | python's supervisor, assist you in better monitor your business processes 🚀](https://github.com/whiteCcinn/daemon)

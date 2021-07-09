@@ -23,6 +23,7 @@ const (
 const (
 	protoNormalType   byte = '0'
 	protoResponseType byte = '1'
+	protoRetranType   byte = '2'
 	protoFlag              = "named-pipe-ipc"
 )
 
@@ -105,7 +106,7 @@ func (M Message) segmentFlag() (flag []byte) {
 }
 
 func (M Message) segmentType() (t byte) {
-	t = M[M.segmentFlagLen():M.segmentTypeLen()].Byte()[0]
+	t = M[M.segmentFlagLen() : M.segmentFlagLen()+M.segmentTypeLen()].Byte()[0]
 
 	return t
 }
@@ -132,6 +133,14 @@ func (M Message) Payload() Message {
 
 func (M Message) isLegal() bool {
 	return bytes.Equal(M.segmentFlag(), []byte(protoFlag))
+}
+
+func (M Message) isRetran() bool {
+	return M[M.segmentFlagLen()] == protoRetranType
+}
+
+func (M Message) changeRetran() {
+	M[M.segmentFlagLen()] = protoRetranType
 }
 
 func (M Message) ResponsePayload(message Message) Message {
@@ -307,8 +316,8 @@ func (nctx *Context) Send(message Message) (int, error) {
 	buf = append(buf, protoNormalType)
 	// uuid
 	buf = append(buf, nctx.clientID.Bytes()...)
-	// ttl 10second
-	ttl := time.Now().Unix() + 10
+	// ttl 30 second
+	ttl := time.Now().Unix() + 30
 	timeBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(timeBuf, uint64(ttl))
 	buf = append(buf, timeBuf...)
@@ -360,6 +369,14 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 				if msg == nil {
 					return msg, Closed{}
 				}
+
+				if msg.isRetran() {
+					_, err := nctx.Send(msg)
+					if err != nil {
+						return nil, err
+					}
+					continue
+				}
 				return msg, nil
 			}
 		}
@@ -399,6 +416,7 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 
 			if uuid != nctx.clientID {
 				// resend message to server
+				message.changeRetran()
 				_, err = nctx.directlySend(message)
 				if err != nil {
 					return

@@ -53,7 +53,7 @@ func (M Message) segmentFlag() (flag []byte) {
 }
 
 func (M Message) segmentType() (t byte) {
-	t = M[M.segmentFlagLen():M.segmentTypeLen()].Byte()[0]
+	t = M[M.segmentFlagLen():M.segmentFlagLen()+M.segmentTypeLen()].Byte()[0]
 
 	return t
 }
@@ -108,9 +108,17 @@ func TestProtocol(t *testing.T) {
 	// content
 	buf = append(buf, append(message, delim).Byte()...)
 
-	//fmt.Println(buf)
 
 	recv := Message(buf)
+
+	if string(recv.segmentFlag() )!= protoFlag {
+		t.Error("flag not equal")
+	}
+
+	if recv.segmentType() != protoNormalType {
+		t.Error("type not equal")
+	}
+
 	tmpUUid, _ := recv.segmentUUID()
 	if uuid != tmpUUid {
 		t.Error("uuid not equal")
