@@ -135,9 +135,10 @@ func (M Message) isLegal() bool {
 }
 
 func (M Message) ResponsePayload(message Message) Message {
-	M[M.segmentFlagLen()] = protoResponseType
-	m := M[0 : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
+	m := make([]byte, 0)
+	m = append(m, M[:M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]...)
 	m = append(m, message.Byte()...)
+	m[M.segmentFlagLen()] = protoResponseType
 	return m
 }
 
@@ -242,7 +243,12 @@ func NewContext(ctx context.Context, chroot string, role RoleType, opts ...Optio
 		nctx.namedPipeForWrite = defaultOption.namedPipeForRead
 		nctx.namedPipeForRead = defaultOption.namedPipeForWrite
 
-		nctx.clientID = uuid2.NewV4()
+		for {
+			nctx.clientID = uuid2.NewV4()
+			if !bytes.Contains(nctx.clientID.Bytes(), []byte{nctx.delim}) {
+				break
+			}
+		}
 	}
 
 	nctx.context = ctx

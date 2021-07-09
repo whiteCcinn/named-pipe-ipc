@@ -13,7 +13,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	nctx.Send(named_pipe_ipc.Message("nihao"))
+	t := time.Now().String()
+	//ts := strconv.FormatInt(t, 10)
+
+	nctx.Send(named_pipe_ipc.Message("nihao-" + t))
 	for {
 		dsm, err := nctx.Recv(false)
 		if err != nil && err.Error() != named_pipe_ipc.NoMessageMessage {

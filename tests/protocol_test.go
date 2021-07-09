@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	protoNormalType byte = '0'
+	protoNormalType   byte = '0'
 	protoResponseType byte = '1'
-	protoFlag            = "named-pipe-ipc"
+	protoFlag              = "named-pipe-ipc"
 )
 
 /**
@@ -83,9 +83,10 @@ func (M Message) isLegal() bool {
 }
 
 func (M Message) ResponsePayload(message Message) Message {
-	M[M.segmentFlagLen()] = protoResponseType
-	m := M[0 : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
+	m := make([]byte, 0)
+	m = append(m, M[:M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]...)
 	m = append(m, message.Byte()...)
+	m[M.segmentFlagLen()] = protoResponseType
 	return m
 }
 

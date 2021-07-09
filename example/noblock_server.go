@@ -22,10 +22,11 @@ func main() {
 				}
 
 				if dsm == nil {
-					log.Println("next recv...")
+					//log.Println("next recv...")
 					continue
 				}
 
+				log.Println(dsm.Payload())
 				//errMessage := named_pipe_ipc.Message("send to client")
 				response := dsm.ResponsePayload(named_pipe_ipc.Message("send to client"))
 
@@ -34,7 +35,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				time.Sleep(3 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 		}()
 
@@ -46,7 +47,7 @@ func main() {
 
 	for {
 		log.Println("I am server")
-		time.Sleep(10 * time.Second)
+		time.Sleep(20 * time.Second)
 		if err := nctx.Close(); err != nil {
 			log.Println(err)
 		}
