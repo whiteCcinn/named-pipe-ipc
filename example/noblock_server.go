@@ -47,7 +47,7 @@ func main() {
 
 	for {
 		log.Println("I am server")
-		time.Sleep(20 * time.Second)
+		time.Sleep(60 * time.Second)
 		if err := nctx.Close(); err != nil {
 			log.Println(err)
 		}
