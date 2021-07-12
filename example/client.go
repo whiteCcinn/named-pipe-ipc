@@ -8,8 +8,6 @@ import (
 )
 
 func main() {
-	//fmt.Println(byte('\n'))
-
 	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	//ctx := context.Background()
 	nctx, err := named_pipe_ipc.NewContext(ctx, "./", named_pipe_ipc.C)

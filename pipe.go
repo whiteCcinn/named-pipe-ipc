@@ -69,8 +69,8 @@ func WithDelim(delim byte) Option {
 
 /**
 protocol:
-	14byte - 1byte - 16byte - 8byte - string
-	flag - type - uuid  - ttl - content
+	8byte - 14byte - 1byte - 16byte - 8byte - string
+	byteLength - flag - type - uuid  - ttl - content
 */
 
 type Message []byte
@@ -81,6 +81,10 @@ func (M Message) String() string {
 
 func (M Message) Byte() []byte {
 	return M
+}
+
+func (M Message) segmentPackageLengthLen() int {
+	return 8
 }
 
 func (M Message) segmentTypeLen() int {
@@ -99,32 +103,36 @@ func (M Message) segmentTTLLen() int {
 	return 8
 }
 
+func (M Message) segmentPackageLength() int64 {
+	return int64(binary.BigEndian.Uint64(M[0:M.segmentPackageLengthLen()]))
+}
+
 func (M Message) segmentFlag() (flag []byte) {
-	flag = M[0:M.segmentFlagLen()].Byte()
+	flag = M[M.segmentPackageLengthLen() : M.segmentPackageLengthLen()+M.segmentFlagLen()].Byte()
 
 	return flag
 }
 
 func (M Message) segmentType() (t byte) {
-	t = M[M.segmentFlagLen() : M.segmentFlagLen()+M.segmentTypeLen()].Byte()[0]
+	t = M[M.segmentPackageLengthLen()+M.segmentFlagLen() : M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()].Byte()[0]
 
 	return t
 }
 
 func (M Message) segmentUUID() (uuid uuid2.UUID, err error) {
-	uuid, err = uuid2.FromBytes(M[M.segmentFlagLen()+M.segmentTypeLen() : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()])
+	uuid, err = uuid2.FromBytes(M[M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen() : M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()])
 	return
 }
 
 func (M Message) segmentTTL() (ttl int64) {
-	timestamp := M[M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen() : M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
+	timestamp := M[M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen() : M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]
 	ttl = int64(binary.BigEndian.Uint64(timestamp))
 
 	return
 }
 
 func (M Message) segmentPayload() Message {
-	return M[M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen():]
+	return M[M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen():]
 }
 
 func (M Message) Payload() Message {
@@ -136,18 +144,25 @@ func (M Message) isLegal() bool {
 }
 
 func (M Message) isRetran() bool {
-	return M[M.segmentFlagLen()] == protoRetranType
+	return M[M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()-1] == protoRetranType
 }
 
 func (M Message) changeRetran() {
-	M[M.segmentFlagLen()] = protoRetranType
+	M[M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()-1] = protoRetranType
 }
 
 func (M Message) ResponsePayload(message Message) Message {
-	m := make([]byte, 0)
-	m = append(m, M[:M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]...)
-	m = append(m, message.Byte()...)
-	m[M.segmentFlagLen()] = protoResponseType
+	ma := make([]byte, 0)
+	ma = append(ma, M[M.segmentPackageLengthLen():M.segmentPackageLengthLen()+M.segmentFlagLen()+M.segmentTypeLen()+M.segmentUUIDLen()+M.segmentTTLLen()]...)
+	ma[M.segmentFlagLen()+M.segmentTypeLen()-1] = protoResponseType
+	ma = append(ma, message.Byte()...)
+	packageLengthBuf := make([]byte, 8)
+	// package-buf's length + delim's length
+	// 8 + 1s
+	binary.BigEndian.PutUint64(packageLengthBuf, uint64(len(ma)+8+1))
+	m := append(make([]byte, 0), packageLengthBuf...)
+	m = append(m, ma...)
+
 	return m
 }
 
@@ -317,13 +332,21 @@ func (nctx *Context) Send(message Message) (int, error) {
 	// uuid
 	buf = append(buf, nctx.clientID.Bytes()...)
 	// ttl 30 second
-	ttl := time.Now().Unix() + 30
+	ttl := time.Now().Unix() + 10
 	timeBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(timeBuf, uint64(ttl))
 	buf = append(buf, timeBuf...)
 	// content
 	buf = append(buf, append(message, nctx.delim).Byte()...)
-	nn, err := nctx.bw.Write(buf)
+	// package length
+	packageLengthBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(packageLengthBuf, uint64(len(buf)+8))
+
+	protocol := make([]byte, 0, len(packageLengthBuf)+len(buf))
+	protocol = append(protocol, packageLengthBuf...)
+	protocol = append(protocol, buf...)
+
+	nn, err := nctx.bw.Write(protocol)
 	if err != nil {
 		return 0, nil
 	}
@@ -382,13 +405,16 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 		}
 	} else {
 		var (
-			bf  []byte
+			bf  Message
 			err error
 		)
 
 		ok := make(chan bool, 1)
 
 		go func() {
+		ResetReadBytes:
+			var bfs = make([]Message, 0)
+			var expectLength int64 = 0
 		ReadBytes:
 			bf, err = nctx.br.ReadBytes(nctx.delim)
 			if err != nil && err != io.EOF {
@@ -404,27 +430,55 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 				return
 			}
 
-			message := Message(bf)
-			uuid, err := message.segmentUUID()
-			if err != nil {
-				return
-			}
-			if message.segmentTTL() < time.Now().Unix() {
-				// drop message
-				goto ReadBytes
-			}
+			if bf != nil {
+				if expectLength == 0 {
+					expectLength = bf.segmentPackageLength()
+					bfs = append(bfs, bf)
+				} else {
+					bfs = append(bfs, bf)
+				}
 
-			if uuid != nctx.clientID {
-				// resend message to server
-				message.changeRetran()
-				_, err = nctx.directlySend(message)
+				var sum int64 = 0
+				for _, tbf := range bfs {
+					sum += int64(len(tbf.Byte()))
+				}
+
+				if sum != expectLength {
+					if sum > expectLength {
+						goto ResetReadBytes
+					}
+					goto ReadBytes
+				}
+
+				var buf Message
+				for _, tbf := range bfs {
+					buf = append(buf, tbf.Byte()...)
+				}
+
+				message := buf
+				uuid, err := message.segmentUUID()
 				if err != nil {
 					return
 				}
-				goto ReadBytes
-			}
+				if message.segmentTTL() < time.Now().Unix() {
+					// drop message
+					goto ReadBytes
+				}
 
-			ok <- true
+				if uuid != nctx.clientID {
+					// resend message to server
+					message.changeRetran()
+					_, err = nctx.directlySend(message)
+					if err != nil {
+						return
+					}
+					goto ReadBytes
+				}
+
+				// read not include nctx.delim
+				bf = buf[:len(buf)-1]
+				ok <- true
+			}
 		}()
 
 		for {
@@ -433,8 +487,6 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 				err = nctx.close()
 				return nil, HybridError{nctx.context.Err(), err}
 			case <-ok:
-				// read not include nctx.delim
-				bf = bf[:len(bf)-1]
 				return bf, nil
 			}
 		}
@@ -445,6 +497,8 @@ func (nctx *Context) Recv(block bool) (Message, error) {
 func (nctx *Context) Listen() error {
 	var err error
 	var bf Message
+	var bfs = make([]Message, 0)
+	var expectLength int64 = 0
 	for err == nil {
 		select {
 		case <-nctx.context.Done():
@@ -468,9 +522,35 @@ func (nctx *Context) Listen() error {
 			return err
 		}
 
-		// read not include nctx.delim
-		bf = bf[:len(bf)-1]
-		nctx.out <- bf
+		if bf != nil {
+			if expectLength == 0 {
+				expectLength = bf.segmentPackageLength()
+				bfs = append(bfs, bf)
+			} else {
+				bfs = append(bfs, bf)
+			}
+
+			var sum int64 = 0
+			for _, tbf := range bfs {
+				sum += int64(len(tbf.Byte()))
+			}
+
+			if sum != expectLength {
+				continue
+			}
+
+			var buf Message
+			for _, tbf := range bfs {
+				buf = append(buf, tbf.Byte()...)
+			}
+
+			// read not include nctx.delim
+			buf = buf[:len(buf)-1]
+			nctx.out <- buf
+
+			expectLength = 0
+			bfs = make([]Message, 0)
+		}
 	}
 
 	return nil

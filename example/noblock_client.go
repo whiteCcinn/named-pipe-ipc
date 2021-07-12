@@ -8,13 +8,14 @@ import (
 )
 
 func main() {
+	//tctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	//nctx, err := named_pipe_ipc.NewContext(tctx, "./", named_pipe_ipc.C)
 	nctx, err := named_pipe_ipc.NewContext(context.Background(), "./", named_pipe_ipc.C)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	t := time.Now().String()
-	//ts := strconv.FormatInt(t, 10)
 
 	nctx.Send(named_pipe_ipc.Message("nihao-" + t))
 	for {
